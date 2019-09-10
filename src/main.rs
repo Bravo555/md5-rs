@@ -2,9 +2,8 @@ use std::{convert::TryInto, env, fs, mem};
 
 fn main() {
     let mut args = env::args().skip(1);
-    let filename = args.next().expect("usage: ./progname file");
+    let data = args.next().expect("text data expected").into_bytes();
 
-    let data = "a".bytes().collect();
     // perform md5 upon read data
     let result = md5(&data);
 
@@ -16,7 +15,8 @@ fn main() {
 
 fn md5(data: &Vec<u8>) -> [u32; 4] {
     // 512 bits is 64 bytes (u8)
-    let data = add_padding(&data);
+
+    let data = add_padding(data);
 
     // group the data into a word (u32) sized chunks
     let data: Vec<u32> = data
@@ -97,7 +97,7 @@ fn add_padding(data: &Vec<u8>) -> Vec<u8> {
     let block_size = 512;
 
     let mut data = data.clone();
-    let msg_size: u64 = (data.len() * mem::size_of::<u8>())
+    let msg_size: u64 = (data.len() * mem::size_of::<u8>() * 8)
         .try_into()
         .expect("error during conversion message size from usize to u64");
     let wrapped_size = (msg_size + 64 + block_size) / block_size * block_size - 64;
@@ -154,5 +154,52 @@ impl Md5State {
             c: self.c.wrapping_add(new_state.c),
             d: self.d.wrapping_add(new_state.d),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // MD5 ("") = d41d8cd98f00b204e9800998ecf8427e
+    // MD5 ("a") = 0cc175b9c0f1b6a831c399e269772661
+    // MD5 ("abc") = 900150983cd24fb0d6963f7d28e17f72
+    // MD5 ("message digest") = f96b697d7cb7938d525a2f31aaf161d0
+    // MD5 ("abcdefghijklmnopqrstuvwxyz") = c3fcd3d76192e4007dfb496cca67e13b
+    // MD5 ("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") =
+    // d174ab98d277d9f5a5611c2c9f419d9f
+    // MD5 ("123456789012345678901234567890123456789012345678901234567890123456
+    // 78901234567890") = 57edf4a22be3c955ac49da2e2107b67a
+    #[test]
+    fn test_empty_string() {
+        assert_eq!(md5_to_string(""), "d41d8cd98f00b204e9800998ecf8427e");
+        assert_eq!(md5_to_string("a"), "0cc175b9c0f1b6a831c399e269772661");
+        assert_eq!(md5_to_string("abc"), "900150983cd24fb0d6963f7d28e17f72");
+        assert_eq!(
+            md5_to_string("message digest"),
+            "f96b697d7cb7938d525a2f31aaf161d0"
+        );
+        assert_eq!(
+            md5_to_string("abcdefghijklmnopqrstuvwxyz"),
+            "c3fcd3d76192e4007dfb496cca67e13b"
+        );
+        assert_eq!(
+            md5_to_string("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"),
+            "d174ab98d277d9f5a5611c2c9f419d9f"
+        );
+        assert_eq!(
+            md5_to_string(
+                "12345678901234567890123456789012345678901234567890123456789012345678901234567890"
+            ),
+            "57edf4a22be3c955ac49da2e2107b67a"
+        );
+    }
+
+    fn md5_to_string(text: &str) -> String {
+        let hash = md5(&text.to_owned().into_bytes());
+        format!(
+            "{:08x}{:08x}{:08x}{:08x}",
+            hash[0], hash[1], hash[2], hash[3]
+        )
     }
 }
